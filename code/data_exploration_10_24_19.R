@@ -32,10 +32,17 @@ library(rasterVis)
 library(corrplot)
 library(factoextra)
 library(gplots)
+library(sf)
+library(transformr)
+library(rnaturalearth)
+library(rnaturalearthdata)
+library(sp)
+library(maptools)
+library(rmapshaper)
 
 outfolder="/Volumes/SeaGate/IUU_GRW/data/raw_gaps_2018-10_2019/plots_10_24_10/"#;dir.create(outfolder)
 rasterdir="/Volumes/SeaGate/IUU_GRW/data/raw_gaps_2018-10_2019/plots_10_24_10/gear_flag_ras/"#;dir.create(rasterdir)
-pngdir="/Volumes/SeaGate/IUU_GRW/data/raw_gaps_2018-10_2019/plots_10_24_10/gear_flag_png/";dir.create(pngdir)
+pngdir="/Volumes/SeaGate/IUU_GRW/data/raw_gaps_2018-10_2019/plots_10_24_10/gear_flag_png/"#;dir.create(pngdir)
 
 a=read.csv("/Volumes/SeaGate/IUU_GRW/data/raw_gaps_2018-10_2019/filtered_gaps_10_24_29.csv")
 b=a %>% filter(frac_day_coverage>.2)
@@ -417,3 +424,55 @@ print(ras_plot)
 dev.off()
   }
 }
+
+# wow that was exhausting. going back to bigger picture ####
+a=read.csv("/Volumes/SeaGate/IUU_GRW/data/raw_gaps_2018-10_2019/filtered_gaps_10_24_29.csv")
+b=a %>% filter(frac_day_coverage>.2)
+c=b %>% .[complete.cases(.),] %>%  dplyr::select(on_lat,on_lon)
+c=c[,2:1]
+x=raster()
+res(x)=1
+crs(x)="+proj=longlat +datum=WGS84 +ellps=WGS84 +towgs84=0,0,0 "
+ras=rasterize(c,x)
+writeRaster(ras,"/Volumes/SeaGate/IUU_GRW/data/raw_gaps_2018-10_2019/plots_10_24_10/total_gaps.tif",format="GTiff")
+# writeRaster(ras,"/Volumes/SeaGate/IUU_GRW/data/raw_gaps_2018-10_2019/raw_gaps_v20191021.csv/total_gaps.grd")
+
+# fname<-system.file("/Volumes/SeaGate/IUU_GRW/global_shp/WDPA_Oct2019-shapefile/WDPA_Oct2019-shapefile-polygons.shp",package = "sf")
+# nc <- st_read("/Volumes/SeaGate/IUU_GRW/global_shp/WDPA_Oct2019-shapefile/WDPA_Oct2019-shapefile-polygons.shp")
+# 
+# nc1=nc %>% filter(IUCN_CAT=="Ia"|IUCN_CAT=="Ib"|IUCN_CAT=="II"|IUCN_CAT=="III"|IUCN_CAT=="IV") %>% filter(STATUS=="Designated") %>% filter(MARINE==2)
+# st_write(nc1,"/Volumes/SeaGate/IUU_GRW/global_shp/filtered_mpas.shp")
+# nc1=st_read(("/Volumes/SeaGate/IUU_GRW/global_shp/filtered_mpas.shp"))
+nc1=readShapeSpatial(("/Volumes/SeaGate/IUU_GRW/global_shp/filtered_mpas.shp"))
+nc2=fortify(nc1)
+nc3=nc2 %>% filter(id==0|id==1)
+
+# nc3=nc1[1:3,]
+# simplepolys <- rmapshaper::ms_simplify(input = as(nc1, 'Spatial')) %>%
+#   st_as_sf()
+
+
+# ncF=fortify(nc1)
+# broken attempts at sf
+# nc1=st_read(("/Volumes/SeaGate/IUU_GRW/global_shp/filtered_mpas.shp"))
+# nc3=nc1[1:3,]
+# ggplot()+geom_sf()+geom_sf(data=nc3,fill="yellow")
+
+
+ras_plot=rasterVis::gplot(ras)+geom_tile(aes(fill=value))+
+  scale_fill_distiller(palette="Spectral",na.value="white")+
+  coord_equal()+geom_map(data=map.world,map=map.world,aes(map_id=region,x=long,y=lat))+ theme(panel.grid.major = element_blank(), panel.grid.minor = element_blank())+
+  scale_y_continuous(expand = c(0,0)) + 
+  scale_x_continuous(expand = c(0,0)) +ggtitle(paste0("Total gaps"))+theme(text = element_text(size=7),plot.title = element_text(size = 7))+ guides(shape = guide_legend(override.aes = list(size = 0.3)))+
+ geom_polygon(data=nc2,aes(x=long,y=lat,group=id),color="yellow",fill="yellow",alpha=.2)
+
+
+png(paste0(outfolder,"mpa_total_gaps.png"),width=16,height=8,units='cm',res=400)
+par(ps=10)
+par(mar=c(1,1,1,1))
+par(cex=1)
+ras_plot
+dev.off()
+
+a=raster("/Users/heatherwelch/Dropbox/JPSS/global/global_averages_mask/modis.grd")
+writeRaster(a,"/Users/heatherwelch/Desktop/Win7Desktop/GFW_IUU/modis.tif",format="GTiff")
