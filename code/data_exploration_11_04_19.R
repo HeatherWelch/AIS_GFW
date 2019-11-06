@@ -182,10 +182,15 @@ summary(gap_brt_poiss_fixed)
 gbm.plot(gap_brt_poiss_fixed)
 
 gap_brt_poiss_fixed = gbm.step(master,gbm.x=c("dist_shore","bathy","bathy_sd","modis","modis_sd","temp"),gbm.y="presAbs",family="bernoulli",learning.rate = 0.1, tree.complexity = 5, bag.fraction = 0.6)
+dev_eval(gap_brt_poiss_fixed) 
+summary(gap_brt_poiss_fixed)
+gbm.plot(gap_brt_poiss_fixed)
+write_rds(gap_brt_poiss_fixed,"/Volumes/SeaGate/IUU_GRW/data/raw_gaps_2018-10_2019/plots_10_24_10/brt_bernoulli_lr.1,tc5,bf.6.rds")
+
 
 co_stack=stack(bathy_res,bathy_res_sd,modis_res,modis_res_sd,dist_shore,temp) %>% mask(.,buf,inverse=T)
 names(co_stack)=c("bathy","bathy_sd","modis","modis_sd","dist_shore","temp")
-gap_brt_ras=predict(co_stack,gap_brt_poiss_fixed,n.trees=2000,type="response")
+gap_brt_ras=predict(co_stack,gap_brt_poiss_fixed,n.trees=gap_brt_poiss_fixed$gbm.call$best.trees,type="response")
 plot(gap_brt_ras)
 
 rasterVis::gplot(gap_brt_ras)+geom_tile(aes(fill=value))+
@@ -224,4 +229,4 @@ kfolds_eval <- function(dataInput, gbm.x, gbm.y, lr=lr, tc){
   }
   return(Evaluations_kfold)}
 
-test=kfolds_eval(master,gbm.x =c("dist_shore","bathy","bathy_sd","modis","modis_sd","temp"),gbm.y="presAbs",lr=0.01,tc=3 )
+test=kfolds_eval(master,gbm.x =c("dist_shore","bathy","bathy_sd","modis","modis_sd","temp"),gbm.y="presAbs",lr=0.1,tc=5 )
