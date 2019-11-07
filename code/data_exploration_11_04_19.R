@@ -141,8 +141,8 @@ ras=rasterize(c,x,fun=sum)
 ras[is.na(ras[])]=0
 ras=ras %>% mask(.,buf,inverse=T)
 ras_pnt=rasterToPoints(ras) %>% as.data.frame()%>% rename(sum_gaps=layer)
-ras_pnt_abs=ras_pnt %>% filter(sum_gaps==0) %>% mutate(presAbs=0) %>% select(-c(sum_gaps)) %>% .[sample(nrow(.),10000),] ## take a random sample, was doing too good with all points
-pres=a %>% select(on_lat,on_lon) %>% mutate(presAbs=1) %>% rename(x=on_lon) %>% rename(y=on_lat)
+ras_pnt_abs=ras_pnt %>% filter(sum_gaps==0) %>% mutate(presAbs=0) %>% dplyr::select(-c(sum_gaps)) %>% .[sample(nrow(.),10000),] ## take a random sample, was doing too good with all points
+pres=a %>% dplyr::select(on_lat,on_lon) %>% mutate(presAbs=1) %>% rename(x=on_lon) %>% rename(y=on_lat)
 
 master=rbind(pres,ras_pnt_abs) %>% mutate(random=sample(1:nrow(.),nrow(.),replace=F))
 
@@ -181,11 +181,18 @@ dev_eval(gap_brt_poiss_fixed)
 summary(gap_brt_poiss_fixed)
 gbm.plot(gap_brt_poiss_fixed)
 
-gap_brt_poiss_fixed = gbm.step(master,gbm.x=c("dist_shore","bathy","bathy_sd","modis","modis_sd","temp"),gbm.y="presAbs",family="bernoulli",learning.rate = 0.1, tree.complexity = 5, bag.fraction = 0.6)
+# point-based models, using gbm.step to find ideal number of trees instead of gbm.fixed ####
+# gap_brt_poiss_fixed = gbm.step(master,gbm.x=c("dist_shore","bathy","bathy_sd","modis","modis_sd","temp"),gbm.y="presAbs",family="bernoulli",learning.rate = 0.1, tree.complexity = 5, bag.fraction = 0.6)
 dev_eval(gap_brt_poiss_fixed) 
 summary(gap_brt_poiss_fixed)
 gbm.plot(gap_brt_poiss_fixed)
-write_rds(gap_brt_poiss_fixed,"/Volumes/SeaGate/IUU_GRW/data/raw_gaps_2018-10_2019/plots_10_24_10/brt_bernoulli_lr.1,tc5,bf.6.rds")
+
+
+# write_rds(gap_brt_poiss_fixed,"/Volumes/SeaGate/IUU_GRW/data/raw_gaps_2018-10_2019/plots_10_24_10/brt_bernoulli_lr.1,tc5,bf.6.rds")
+model_step=readRDS("/Volumes/SeaGate/IUU_GRW/data/raw_gaps_2018-10_2019/plots_10_24_10/brt_bernoulli_lr.1,tc5,bf.6.rds")
+dev_eval2(model_step) 
+summary(model_step)
+gbm.plot(model_step)
 
 
 co_stack=stack(bathy_res,bathy_res_sd,modis_res,modis_res_sd,dist_shore,temp) %>% mask(.,buf,inverse=T)
@@ -228,5 +235,41 @@ kfolds_eval <- function(dataInput, gbm.x, gbm.y, lr=lr, tc){
     counter=counter+1 
   }
   return(Evaluations_kfold)}
+ratio <- function(dataInput,model_object){
+  ## Predict on model data using the best tree for predicting
+  BRTpred <- predict.gbm(model_object, dataInput, n.trees = model_object$gbm.call$best.trees, "response")
+  # calculate ratio of observed to predicted values for study area
+  ratio.BRTpred <- sum(dataInput$presAbs)/sum(BRTpred)
+  return(ratio.BRTpred)
+}
+
+eval_7525 <- function(dataInput, gbm.x, gbm.y, lr, tc=tc){
+  DataInput <- dataInput
+  Evaluations_7525 <- as.data.frame(matrix(data=0,nrow=1,ncol=3))
+  colnames(Evaluations_7525) <- c("Deviance","AUC","TSS")
+  DataInput_bound <- floor((nrow(DataInput)/4)*3)         #define % of training and test set
+  DataInput_train<- DataInput[sample(nrow(DataInput),DataInput_bound),]
+  DataInput_test<- DataInput[sample(nrow(DataInput),nrow(DataInput)-DataInput_bound),]
+  DataInput.kfolds <- gbm.step(data=DataInput_train, gbm.x= gbm.x, gbm.y = gbm.y, 
+                               family="bernoulli", tree.complexity=tc,
+                               learning.rate = lr, bag.fraction = 0.6)
+  preds <- predict.gbm(DataInput.kfolds, DataInput_test,
+                       n.trees=DataInput.kfolds$gbm.call$best.trees, type="response")
+  dev <- calc.deviance(obs=DataInput_test$presAbs, pred=preds, calc.mean=TRUE)
+  d <- cbind(DataInput_test$presAbs, preds)
+  pres <- d[d[,1]==1,2]
+  abs <- d[d[,1]==0,2]
+  e <- evaluate(p=pres, a=abs)
+  Evaluations_7525[1,1] <- dev
+  Evaluations_7525[1,2] <- e@auc
+  Evaluations_7525[1,3] <- max(e@TPR + e@TNR-1)
+  
+  return(Evaluations_7525)}
+
 
 test=kfolds_eval(master,gbm.x =c("dist_shore","bathy","bathy_sd","modis","modis_sd","temp"),gbm.y="presAbs",lr=0.1,tc=5 )
+ratio(master, model_step)
+test=eval_7525(master,gbm.x =c("dist_shore","bathy","bathy_sd","modis","modis_sd","temp"),gbm.y="presAbs",lr=0.1,tc=5 )
+
+
+

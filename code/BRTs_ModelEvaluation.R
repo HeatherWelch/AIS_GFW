@@ -128,7 +128,7 @@ eval_100_percent <- function(dataInput, gbm.x, gbm.y, lr=lr, tc){
 ########
 #Percent deviance explained: SINGLE model
 #((null deviance - residual deviance)/null deviance)*100
-dev_eval=function(model_object){
+dev_eval2=function(model_object){
   null <- model_object$self.statistics$mean.null
   res <- model_object$self.statistics$mean.resid
   dev=((null - res)/null)*100 
